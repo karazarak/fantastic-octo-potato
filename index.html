@@ -62,22 +62,29 @@ body.has #st{top:auto;bottom:calc(max(20px,env(safe-area-inset-bottom)) + 80px)}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=t=>new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});
-const W='\\s*(?:is|of|was|are|at|:|-)?\\s*';
-
-// Vitals, in display order. g = starts a new group (thick line above).
+const FILL="(?:\\s*(?:'s|is|of|was|are|at|about|around|roughly|approx\\w*|sitting|sits|currently|now|it's|its|reading|reads|showing|the|:|-|=))*\\s*";
+const N2='(\\d{2,3})',N1='(\\d{1,2})',ND='(\\d{1,2}(?:\\.\\d)?)';
+// Vitals, in display order. g = starts a new group (thick line above). L = names, V = value pattern.
 const VD=[
- {k:'BP',n:'BP',u:'mmHg',g:1,lo:90,hi:180,re:'\\b(?:bp|blood pressure|pressure)'+W+'(\\d{2,3})\\s*(?:/|over|on|x|by|\\*)\\s*(\\d{2,3})'},
- {k:'HR',n:'Pulse',u:'bpm',lo:50,hi:120,re:'\\b(?:hr|heart rate|pulse(?: rate)?|heart)'+W+'(\\d{2,3})\\b'},
- {k:'SpO2',n:'SpO₂',u:'%',g:1,lo:92,hi:101,re:'\\b(?:spo2|sp02|sp o2|oxygen saturations?|o2 sat(?:uration)?s?|sats?|saturations?)'+W+'(\\d{2,3})\\s*%?(?:\\s*on\\s*(room air|ra\\b|\\d+\\s*(?:l|litres|liters|lpm)\\b))?'},
- {k:'RR',n:'Resp rate',u:'/min',lo:10,hi:24,re:'\\b(?:rr|respirat\\w*(?: rate)?|resps?(?: rate)?|breathing rate)'+W+'(\\d{1,2})\\b'},
- {k:'BGL',n:'BGL',u:'mmol/L',g:1,lo:4,hi:15,re:'\\b(?:bgl|bsl|blood sugar|blood glucose|glucose|sugar)'+W+'(\\d{1,2}(?:\\.\\d)?)'},
- {k:'Temp',n:'Temp',u:'°C',lo:35,hi:38.5,re:'\\b(?:temp|temperature)'+W+'(\\d{2}(?:\\.\\d)?)'},
- {k:'EtCO2',n:'EtCO₂',u:'mmHg',g:1,lo:35,hi:45,re:'\\b(?:etco2|etco 2|et co2|etc o2|e t c o 2|end[- ]tidal(?: co2| c o 2)?|capno\\w*)'+W+'(\\d{1,2})\\b'},
- {k:'GCS',n:'GCS',u:'/15',g:1,opt:1,lo:15,hi:16,re:'\\bgcs'+W+'(\\d{1,2})\\b'},
- {k:'Pain',n:'Pain',u:'/10',opt:1,lo:-1,hi:7,re:'\\bpain(?: score)?'+W+'(\\d{1,2})\\s*(?:/|out of|on)?\\s*(?:10)?\\b'}
-].map(d=>({...d,re:new RegExp(d.re)}));
-const LABEL=/^(bp|blood pressure|pressure|pulse( rate)?|heart rate|hr|resp\w*( rate)?|rr|sats|spo2|sp02|oxygen saturations?|o2 sats?|bgl|bsl|blood sugar|blood glucose|glucose|sugar|temp|temperature|gcs|etco2|end[- ]tidal( co2)?|capnography|pain( score)?)[.!?]?$/;
-
+ {k:'BP',n:'BP',u:'mmHg',g:1,lo:90,hi:180,L:'bp|blood pressure|pressure',V:N2+'\\s*(?:/|over|on|x|by|\\*)\\s*'+N2},
+ {k:'HR',n:'Pulse',u:'bpm',lo:50,hi:120,L:'hr|heart rate|pulse(?: rate)?|heart',V:N2},
+ {k:'SpO2',n:'SpO₂',u:'%',g:1,lo:92,hi:101,L:'spo2|sp02|oxygen saturations?|o2 sat(?:uration)?s?|sats?|saturations?',V:N2+'\\s*%?(?:\\s*on\\s*(room air|ra\\b|\\d+\\s*(?:l|litres|liters|lpm)\\b))?'},
+ {k:'RR',n:'Resp rate',u:'/min',lo:10,hi:24,L:'rr|respirat\\w*(?: rate)?|resps?(?: rate)?|breathing rate',V:N1},
+ {k:'BGL',n:'BGL',u:'mmol/L',g:1,lo:4,hi:15,L:'bgl|bsl|blood sugar|blood glucose|glucose|sugar',V:ND},
+ {k:'Temp',n:'Temp',u:'°C',lo:35,hi:38.5,L:'temp|temperature',V:'(\\d{2}(?:\\.\\d)?)'},
+ {k:'EtCO2',n:'EtCO₂',u:'mmHg',g:1,lo:35,hi:45,L:'etco2|etco 2|et co2|etc o2|e t c o 2|end[- ]tidal(?: co2| c o 2)?|capno\\w*',V:N1},
+ {k:'GCS',n:'GCS',u:'/15',g:1,opt:1,lo:15,hi:16,L:'gcs',V:N1},
+ {k:'Pain',n:'Pain',u:'/10',opt:1,lo:-1,hi:7,L:'pain(?: score)?',V:N1+'(?:\\s*(?:/|out of)\\s*10)?'}
+].map(d=>({...d,
+  fw:new RegExp('\\b(?:'+d.L+')'+FILL+d.V+'(?![\\d.])','g'),
+  rv:new RegExp('\\b'+d.V.replace('(?:\\s*on\\s*(room air|ra\\b|\\d+\\s*(?:l|litres|liters|lpm)\\b))?','')+'\\s*(?:%\\s*)?(?:for\\s+)?(?:'+d.L+')\\b','g')}));
+// No name said: "130 over 85" is BP, "96%" is SpO2, "8 out of 10" is pain
+const BARE=[
+ {k:'BP',re:/\b(\d{2,3})\s*(?:\/|over)\s*(\d{2,3})\b/g},
+ {k:'SpO2',re:/\b(\d{2,3})\s*%(?:\s*on\s*(room air|ra\b|\d+\s*(?:l|litres|liters|lpm)\b))?/g},
+ {k:'Pain',re:/\b(\d{1,2})\s*(?:\/|out of)\s*10\b/g}
+];
+const LABEL=new RegExp('^(?:'+VD.map(d=>d.L).join('|')+')[.!?]?$');
 const CAT=[
  ['A',/\b(allerg\w*|nkda|nka|anaphyla\w*)\b/],
  ['Med',/\b(meds|medications?|takes|taking|prescribed|warfarin|apixaban|rivaroxaban|dabigatran|clopidogrel|metformin|insulin)\b/],
@@ -106,33 +113,54 @@ function words(t){
   flush();return out.join(' ');
 }
 function norm(text){
-  let t=text.toLowerCase().replace(/per ?cent/g,'%').replace(/\bsp o2\b/g,'spo2');
+  let t=text.toLowerCase().replace(/[’‘]/g,"'").replace(/per ?cent/g,'%').replace(/\bsp o2\b/g,'spo2');
   t=words(t);
-  t=t.replace(/(\d+)\s*point\s*(\d)/g,'$1.$2').replace(/\b(\d)\s(\d{2})\b/g,'$1$2');
+  t=t.replace(/(\d+)\s*point\s*(\d)/g,'$1.$2').replace(/\b([12])\s(\d{2})\b/g,'$1$2');
   return t;
 }
-
 let E=[],last=null,hold='';
 try{E=JSON.parse(localStorage.getItem('handover-e'))||[]}catch(err){}
 const save=()=>{try{localStorage.setItem('handover-e',JSON.stringify(E))}catch(err){}};
 
+const IDRE=/\b(\d{1,3})\s*(?:years?[- ]old|yo|y\/o|yrs?)\b[\s,]*(male|female|man|woman|boy|girl)?/;
+const NMRE=/\b(?:name is|named)\s+([a-z][a-z'-]+)/;
+function put(o,d,m){
+  const n=+m[1];if(d.k==='SpO2'&&(n>100||n<50))return false;if(d.k==='HR'&&n>250)return false;
+  const v=d.k==='BP'?m[1]+'/'+m[2]:m[1];
+  const x=d.k==='SpO2'&&m[2]?(m[2][0]==='r'?'RA':m[2].replace(/\D+/g,'')+' L'):'';
+  o[d.k]={v,x,bad:n<d.lo||n>d.hi};return true;
+}
 function parse(t){
   const o={};let rest=t;
-  for(const d of VD){
-    const m=t.match(d.re);if(!m)continue;const n=+m[1];
-    if(d.k==='SpO2'&&n>100)continue;
-    rest=rest.replace(d.re,' ');
-    let v=d.k==='BP'?m[1]+'/'+m[2]:m[1],x='';
-    if(d.k==='SpO2'&&m[2])x=m[2][0]==='r'?'RA':m[2].replace(/\D+/g,'')+' L';
-    o[d.k]={v,x,bad:n<d.lo||n>d.hi};
+  for(const pass of ['fw','rv']){
+    for(const d of VD){
+      rest=rest.replace(d[pass],(...m)=>put(o,d,m)?' , ':m[0]);
+    }
+  }
+  for(const b of BARE){
+    if(o[b.k])continue;const d=VD.find(x=>x.k===b.k);
+    rest=rest.replace(b.re,(...m)=>put(o,d,m)?' , ':m[0]);
   }
   return [o,rest];
 }
-function ident(x){
-  const a=x.match(/\b(\d{1,3})\s*(?:years?[- ]old|yo|y\/o|yrs?)\b[\s,]*(male|female|man|woman|boy|girl)?/i);
-  const nm=x.match(/\b(?:name is|named)\s+([a-z][a-z'-]+)/i);
+function ident(t){
+  const a=t.match(IDRE),nm=t.match(NMRE);
   if(!a&&!nm)return '';
-  return [a?a[1]+(a[2]?(/^(male|man|boy)$/i.test(a[2])?' M':' F'):''):'',nm?nm[1][0].toUpperCase()+nm[1].slice(1):''].filter(Boolean).join(' · ');
+  return [a?a[1]+(a[2]?(/^(male|man|boy)$/.test(a[2])?' M':' F'):''):'',nm?nm[1][0].toUpperCase()+nm[1].slice(1):''].filter(Boolean).join(' · ');
+}
+const FILLER=/^(?:and|so|um+|uh+|er+|ok(?:ay)?|right|then|also|the|a|with|is|are|on|of|at|his|her|their|they|he|she|and then|that's it|that is it)$/;
+function chunks(rest){
+  const out=[];let prev=null;
+  for(let c of rest.replace(IDRE,' ').replace(NMRE,' ').split(/[.,;!?\n]+|\s+(?=(?:history|hx|past history|no known|nkda|nka|allergic|(?<!known )allerg(?:ies|y)|takes|taking|meds|medications|on (?:warfarin|apixaban|insulin|metformin)|lives|gave|given|administered|complain\w*|c\/o|found|fell|injur\w*|lacerat\w*)\b)/)){
+    c=c.replace(/\s+/g,' ').trim().replace(/^(and|so|then|also)\s+/,'');
+    if(!c||FILLER.test(c)||!/[a-z]{3,}/.test(c))continue;
+    let cat=null;for(const [k,re] of CAT)if(re.test(c)){cat=k;break}
+    if(!cat)cat=prev||'O';
+    const txt=c[0].toUpperCase()+c.slice(1);
+    if(prev===cat&&out.length)out[out.length-1].text+=', '+c;else out.push({cat,text:txt});
+    prev=cat;
+  }
+  return out;
 }
 function render(){
   const g={ID:[],M:[],I:[],S:[],T:[],A:[],Med:[],B:[],O:[]},cols=[];let lastRow=null,lastCol=-1;
@@ -140,7 +168,6 @@ function render(){
     const t=norm(e.text);
     const [v,rest]=parse(t),id=ident(t);
     const hasV=Object.keys(v).length;
-    let cat=null;for(const [k,re] of CAT)if(re.test(rest)){cat=k;break}
     if(id){g.ID.push(id);if(e===last)lastRow='ID'}
     if(hasV){
       // merge readings said within 3 min into one column
@@ -149,14 +176,14 @@ function render(){
       else cols.push({time:e.time,v:{...v}});
       if(e===last)lastCol=cols.length-1;
     }
-    if(cat||(!hasV&&!id)){const k=cat||'O';g[k].push(e);if(e===last)lastRow=k}
+    for(const ch of chunks(rest)){g[ch.cat].push({time:e.time,text:ch.text});if(e===last)lastRow=ch.cat}
   }
   // vitals table
   const rows=VD.filter(d=>!d.opt||cols.some(c=>c.v[d.k]));
   $('#vt').innerHTML=`<thead><tr><th>Vitals</th>${cols.length?cols.map((c,i)=>`<th>${fmt(c.time)}</th>`).join(''):'<th></th>'}</tr></thead><tbody>`+
     rows.map((d,ri)=>`<tr class="${d.g&&ri?'g':''}"><th>${d.n}<small>${d.u}</small></th>${cols.length?cols.map((c,i)=>{const x=c.v[d.k];const cls=[x?(x.bad?'bad':''):'empty',i<cols.length-1?'old':'',i===lastCol?'new':''].filter(Boolean).join(' ');return `<td class="${cls}">${x?esc(x.v)+(d.k==='SpO2'?'%':'')+(x.x?`<small>${esc(x.x)}</small>`:''):'—'}</td>`}).join(''):'<td class="empty">—</td>'}</tr>`).join('')+'</tbody>';
   // IMIST-AMBO
-  const line=(e,k)=>`<div class="ln">${k==='T'?`<time>${fmt(e.time)}</time>`:''}${esc(e.text.trim())}</div>`;
+  const line=(e,k)=>`<div class="ln">${k==='T'?`<time>${fmt(e.time)}</time>`:''}${esc(e.text)}</div>`;
   let amb=false;
   $('#tb').innerHTML=ROWS.map(([key,letter,name],i)=>{
     const body=key==='ID'?(g.ID.length?esc(g.ID[0]):''):g[key].map(e=>line(e,key)).join('');
@@ -170,15 +197,11 @@ function render(){
 }
 function heard(text){
   text=String(text||'').trim();if(!text)return;
-  const l=text.toLowerCase().replace(/[.!?]+$/,'');
-  if(/^(new patient|clear( all| everything)?|reset)$/.test(l)){E=[];last=null;hold='';save();render();return}
-  if(/^(scratch that|delete( that| last)?|undo)$/.test(l)){E.pop();last=null;hold='';save();render();return}
-  // a vital's name said on its own: wait for the number
-  if(LABEL.test(norm(text))){hold=text;say(text+'…');return}
+  if(CMD(text))return;
+  if(LABEL.test(norm(text).trim())){hold=text;say(text+'…');return}
   if(hold){text=hold+' '+text;hold=''}
   last={time:Date.now(),text};E.push(last);save();render();
 }
-
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 let rec=null,running=false,wanted=false,gen=0,done={},pend={},timer=null,heardAny=false;
 const mic=$('#mic'),st=$('#st');
@@ -190,23 +213,30 @@ function problem(){
   if(!SR)return 'This browser has no speech recognition. Use Chrome, or Safari on iPhone or iPad.';
   return '';
 }
-function commit(key){if(done[key]||!pend[key])return;done[key]=1;heard(pend[key]);delete pend[key]}
-function flushAll(){for(const k in pend)commit(k)}
+let burst=[],silence=null;
+const CMD=t=>{const l=t.toLowerCase().replace(/[.!?]+$/,'').trim();
+  if(/^(new patient|clear( all| everything)?|reset)$/.test(l)){burst=[];hold='';E=[];last=null;save();render();say('Cleared');return true}
+  if(/^(scratch that|delete( that| last)?|undo)$/.test(l)){burst=[];E.pop();last=null;save();render();say('Removed last');return true}
+  return false};
+function piece(txt){txt=txt.trim();if(!txt||CMD(txt))return;burst.push(txt)}
+function endBurst(){for(const k in pend){if(!done[k]){done[k]=1;piece(pend[k])}delete pend[k]}
+  if(burst.length){const all=burst.join(' ');burst=[];heard(all)}}
+function live(interim){say([...burst,interim].join(' ').trim())}
 function start(){
   if(running||!wanted)return;
   const g=++gen;
   try{
     rec=new SR();rec.lang='en-AU';rec.continuous=true;rec.interimResults=true;rec.maxAlternatives=1;
-    rec.onstart=()=>{if(!heardAny)say('Listening… say a finding')};
+    rec.onstart=()=>{if(!heardAny)say('Listening… talk normally, it sorts the vitals for you')};
     rec.onresult=ev=>{
-      let live='';
+      let interim='';
       for(let i=ev.resultIndex;i<ev.results.length;i++){
         const r=ev.results[i],key=g+':'+i,txt=r[0].transcript.trim();
-        if(!txt)continue;heardAny=true;
-        pend[key]=txt;if(r.isFinal)commit(key);else live+=txt+' ';
+        if(!txt||done[key])continue;heardAny=true;
+        if(r.isFinal){done[key]=1;delete pend[key];piece(txt)}else{pend[key]=txt;interim+=txt+' '}
       }
-      if(live)say(live.trim());
-      clearTimeout(timer);timer=setTimeout(()=>{flushAll();if(!hold)say('')},1600);
+      live(interim.trim());
+      clearTimeout(silence);silence=setTimeout(()=>{endBurst();if(!hold)say('')},2200);
     };
     rec.onerror=ev=>{
       if(/not-allowed|service-not-allowed/.test(ev.error)){wanted=false;ui();say('Speech recognition was blocked. Allow the microphone for this site, and on iPhone or iPad turn on Settings › General › Keyboard › Enable Dictation.',1)}
@@ -214,16 +244,16 @@ function start(){
       else if(ev.error==='network')say('Speech recognition needs an internet connection.',1);
       else if(ev.error==='audio-capture'){wanted=false;ui();say('No microphone found.',1)}
     };
-    rec.onend=()=>{running=false;flushAll();if(wanted)setTimeout(start,300);else say('')};
+    rec.onend=()=>{running=false;for(const k in pend){if(!done[k]){done[k]=1;piece(pend[k])}delete pend[k]}if(wanted)setTimeout(start,80);else{endBurst();say('')}};
     rec.start();running=true;
   }catch(err){running=false;say('Could not start listening: '+err.message,1)}
 }
 mic.addEventListener('click',()=>{
   const p=problem();if(p){say(p,1);return}
   wanted=!wanted;ui();
-  if(wanted)start();else{if(rec){try{rec.stop()}catch(err){}}flushAll();say('')}
+  if(wanted)start();else{if(rec){try{rec.stop()}catch(err){}}endBurst();say('')}
 });
-window.__test={norm,parse,heard,get E(){return E}};
+window.__test={norm,parse,heard,piece,endBurst,get E(){return E}};
 render();
 }
 </script>
