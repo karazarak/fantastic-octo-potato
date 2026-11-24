@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Handover</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Archivo+Narrow:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:light dark;--bg:light-dark(#fff,#0f1113);--ink:light-dark(#121416,#eceef0);--mute:light-dark(#61676f,#9aa1a9);--line:light-dark(#e2e4e7,#2a2e33);--panel:light-dark(#f5f6f7,#171a1e);--red:light-dark(#c8102e,#ff5c70)}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font:17px/1.5 'Archivo',system-ui,sans-serif}
+body{min-height:100vh;padding:max(16px,4vw)}
+table{width:100%;max-width:900px;margin:0 auto;border-collapse:collapse}
+tr{border-bottom:1px solid var(--line)}
+th{width:52px;font:700 26px/1 'Archivo Narrow',sans-serif;background:var(--panel);vertical-align:top;padding:14px 0;text-align:center}
+td{padding:12px 16px;vertical-align:top}
+.t{display:block;font-size:13px;font-weight:600;color:var(--mute)}
+.amb{border-top:2px solid var(--ink)}
+.set{display:flex;flex-wrap:wrap;gap:4px 16px;padding:3px 0}
+.set time{font:700 15px 'Archivo Narrow',sans-serif;color:var(--mute);min-width:44px}
+.set span{white-space:nowrap;font-variant-numeric:tabular-nums}
+.set b{font-weight:700}
+.bad{color:var(--red)}
+.ln time{font:700 15px 'Archivo Narrow',sans-serif;color:var(--mute);margin-right:8px}
+tr.new{animation:pop 1.2s ease-out}
+@keyframes pop{from{background:color-mix(in srgb,var(--red) 16%,transparent)}to{background:transparent}}
+#mic{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:88px;height:88px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--ink);display:grid;place-items:center;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.12);transition:top .35s ease,width .35s,height .35s,background .2s,color .2s}
+#mic:focus-visible{outline:3px solid var(--red);outline-offset:3px}
+#mic svg{width:36px;height:36px}
+body.on #mic{background:var(--red);color:#fff;border-color:var(--red);animation:ring 1.6s ease-out infinite}
+body.has #mic{top:auto;bottom:max(20px,env(safe-area-inset-bottom));transform:translateX(-50%);width:68px;height:68px}
+body.has #mic svg{width:28px;height:28px}
+body.has{padding-bottom:180px}
+#st{position:fixed;background:var(--bg);padding:4px 8px;border-radius:8px;left:50%;top:calc(50% + 64px);transform:translateX(-50%);width:min(90vw,520px);margin:0;text-align:center;color:var(--mute);font-size:16px;line-height:1.4}
+#st.err{color:var(--red)}
+body.has #st{top:auto;bottom:calc(max(20px,env(safe-area-inset-bottom)) + 80px)}
+@keyframes ring{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--red) 45%,transparent)}100%{box-shadow:0 0 0 22px transparent}}
+@media(prefers-reduced-motion:reduce){tr.new,body.on #mic{animation:none}#mic{transition:none}}
+</style>
+</head>
+<body>
+<table id="tb"></table>
+<p id="st" role="status" aria-live="polite"></p>
+<button id="mic" type="button" aria-label="Start listening" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+<script>
+{
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=t=>new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});
+const W='\\s*(?:is|of|was|are|at|:|-)?\\s*';
+const VD=[
+ {k:'HR',u:'',lo:50,hi:120,re:new RegExp('\\b(?:hr|heart rate|pulse)'+W+'(\\d{2,3})\\b')},
+ {k:'BP',u:'',lo:90,hi:180,re:new RegExp('\\b(?:bp|blood pressure|pressure)'+W+'(\\d{2,3})\\s*(?:/|over|on)\\s*(\\d{2,3})')},
+ {k:'RR',u:'',lo:10,hi:24,re:new RegExp('\\b(?:rr|resp(?:iratory|irations|s)?(?: rate)?)'+W+'(\\d{1,2})\\b')},
+ {k:'SpO₂',u:'%',lo:92,hi:101,re:new RegExp('\\b(?:spo2|sp o2|o2 sats?|sats?|saturations?)'+W+'(\\d{2,3})\\s*%?(?:\\s*on\\s*(room air|ra\\b|\\d+\\s*(?:l|litres|liters|lpm)\\b))?')},
+ {k:'GCS',u:'',lo:15,hi:16,re:new RegExp('\\bgcs'+W+'(\\d{1,2})\\b')},
+ {k:'BGL',u:'',lo:4,hi:15,re:new RegExp('\\b(?:bgl|bsl|blood sugar|blood glucose|sugar|glucose)'+W+'(\\d{1,2}(?:\\.\\d)?)')},
+ {k:'Temp',u:'°',lo:35,hi:38.5,re:new RegExp('\\b(?:temp|temperature)'+W+'(\\d{2}(?:\\.\\d)?)')},
+ {k:'Pain',u:'/10',lo:-1,hi:7,re:new RegExp('\\bpain(?: score)?'+W+'(\\d{1,2})\\s*(?:/|out of|on)\\s*10')}
+];
+const CAT=[
+ ['A',/\b(allerg\w*|nkda|nka|anaphyla\w*)\b/],
+ ['Med',/\b(meds|medications?|takes|taking|prescribed|warfarin|apixaban|rivaroxaban|dabigatran|clopidogrel|metformin|insulin)\b/],
+ ['B',/\b(history|hx|pmhx|background|known to)\b/],
+ ['O',/\b(lives|social|family|wife|husband|partner|daughter|son|carer|nok|travelling with)\b/],
+ ['T',/\b(gave|given|administered|aspirin|gtn|salbutamol|oxygen|o2 at|nebs?|nebuli\w*|cannula\w*|iv access|glucagon|dextrose|glucose gel|fentanyl|morphine|methoxy\w*|penthrox|paracetamol|ondansetron|adrenaline|12 lead|ecg|splint\w*|collar|cpr|defib\w*)\b/],
+ ['I',/\b(injur\w*|lacerat\w*|fractur\w*|deformit\w*|abrasion\w*|bruis\w*|bleeding|haematoma|tender\w*|swelling)\b/],
+ ['S',/\b(pale|diaphoretic|clammy|sweaty|cyanos\w*|cyanotic|flushed|mottled|alert|drowsy|speaking|wheez\w*|crackles|pupils)\b/],
+ ['M',/\b(complain\w*|c\/o|fell|fall|found|mva|mvc|collision|onset|pain|started|sudden\w*)\b/]
+];
+const ROWS=[['ID','I','Identification'],['M','M','Mechanism / medical complaint'],['I','I','Injuries / information'],['S','S','Signs'],['T','T','Treatment & trends'],['A','A','Allergies'],['Med','M','Medications'],['B','B','Background'],['O','O','Other / social']];
+
+let E=[],last=null;
+try{E=JSON.parse(localStorage.getItem('handover-e'))||[]}catch(err){}
+const save=()=>{try{localStorage.setItem('handover-e',JSON.stringify(E))}catch(err){}};
+
+function parse(t){
+  const o=[];let rest=t;
+  for(const d of VD){
+    const m=t.match(d.re);if(!m)continue;const n=+m[1];
+    rest=rest.replace(d.re,' ');
+    if(d.k==='SpO₂'&&n>100)continue;
+    let v=d.k==='BP'?m[1]+'/'+m[2]:m[1]+d.u;
+    if(d.k==='SpO₂'&&m[2])v+=m[2][0]==='r'?' RA':' on '+m[2].replace(/\D+/g,'')+'L';
+    o.push({k:d.k,v,bad:n<d.lo||n>d.hi});
+  }
+  return [o,rest];
+}
+function ident(x){
+  const a=x.match(/\b(\d{1,3})\s*(?:years?[- ]old|yo|y\/o|yrs?)\b[\s,]*(male|female|man|woman|boy|girl)?/i);
+  const nm=x.match(/\b(?:name is|named)\s+([a-z][a-z'-]+)/i);
+  if(!a&&!nm)return '';
+  return [a?a[1]+(a[2]?(/^(male|man|boy)$/i.test(a[2])?' M':' F'):''):'',nm?nm[1][0].toUpperCase()+nm[1].slice(1):''].filter(Boolean).join(' · ');
+}
+function render(){
+  const g={ID:[],M:[],I:[],S:[],T:[],A:[],Med:[],B:[],O:[]},vs=[];let lastRow=null;
+  for(const e of E){
+    const t=e.text.toLowerCase().replace(/per ?cent/g,'%');
+    const [v,rest]=parse(t),id=ident(e.text);
+    let cat=null;for(const [k,re] of CAT)if(re.test(rest)){cat=k;break}
+    if(id){g.ID.push(id);if(e===last)lastRow='ID'}
+    if(v.length){vs.push({time:e.time,v});if(e===last)lastRow='S'}
+    if(cat||(!v.length&&!id)){const k=cat||'O';g[k].push(e);if(e===last)lastRow=k}
+  }
+  const line=e=>`<div class="ln">${['T','S'].includes(e._k)?`<time>${fmt(e.time)}</time>`:''}${esc(e.text.trim())}</div>`;
+  $('#tb').innerHTML=ROWS.map(([key,letter,name],i)=>{
+    let body='';
+    if(key==='ID')body=g.ID.length?esc(g.ID[0]):'';
+    else if(key==='S')body=vs.map(s=>`<div class="set"><time>${fmt(s.time)}</time>${s.v.map(x=>`<span class="${x.bad?'bad':''}"><b>${x.k}</b> ${esc(x.v)}</span>`).join('')}</div>`).join('')+g.S.map(e=>(e._k='S',line(e))).join('');
+    else body=g[key].map(e=>(e._k=key,line(e))).join('');
+    if(!body)return '';
+    return `<tr class="${key===lastRow?'new':''}"><th>${letter}</th><td><span class="t">${name}</span>${body}</td></tr>`;
+  }).join('');
+  const rows=[...document.querySelectorAll('#tb tr')];
+  const firstAmbo=rows.find(r=>/Allergies|Medications|Background|Other/.test(r.textContent));
+  if(firstAmbo&&firstAmbo!==rows[0])firstAmbo.classList.add('amb');
+  const n=document.querySelector('tr.new');if(n)n.scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+function heard(text){
+  text=String(text||'').trim();if(!text)return;
+  const l=text.toLowerCase();
+  if(/^(new patient|clear( all| everything)?|reset)\.?$/.test(l)){E=[];last=null;save();render();return}
+  if(/^(scratch that|delete( that| last)?|undo)\.?$/.test(l)){E.pop();last=null;save();render();return}
+  last={time:Date.now(),text};E.push(last);save();render();
+}
+
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null,running=false,wanted=false,gen=0,done={},pend={},timer=null,heardAny=false;
+const mic=$('#mic'),st=$('#st');
+const say=(m,err)=>{st.textContent=m||'';st.classList.toggle('err',!!err)};
+const ui=()=>{document.body.classList.toggle('on',wanted);document.body.classList.toggle('has',E.length>0);mic.setAttribute('aria-pressed',wanted);mic.setAttribute('aria-label',wanted?'Stop listening':'Start listening')};
+function problem(){
+  if(window.top!==window)return 'The microphone is blocked in this preview. Open the page on your website in Chrome or Safari.';
+  if(!window.isSecureContext)return 'The microphone needs a secure link (https). Open the page from your website.';
+  if(!SR)return 'This browser has no speech recognition. Use Chrome, or Safari on iPhone.';
+  return '';
+}
+function commit(key){if(done[key]||!pend[key])return;done[key]=1;heard(pend[key]);delete pend[key]}
+function flushAll(){for(const k in pend)commit(k)}
+function start(){
+  if(running||!wanted)return;
+  const g=++gen;
+  try{
+    rec=new SR();rec.lang='en-AU';rec.continuous=true;rec.interimResults=true;rec.maxAlternatives=1;
+    rec.onstart=()=>{if(!heardAny)say('Listening… say a finding')};
+    rec.onresult=ev=>{
+      let live='';
+      for(let i=ev.resultIndex;i<ev.results.length;i++){
+        const r=ev.results[i],key=g+':'+i,txt=r[0].transcript.trim();
+        if(!txt)continue;heardAny=true;
+        if(r.isFinal){pend[key]=txt;commit(key)}else{pend[key]=txt;live+=txt+' '}
+      }
+      say(live.trim());
+      clearTimeout(timer);timer=setTimeout(()=>{flushAll();say('')},1600);
+    };
+    rec.onerror=ev=>{
+      if(/not-allowed|service-not-allowed/.test(ev.error)){wanted=false;ui();say('Microphone access was refused. Allow the microphone for this site in your browser settings, then tap again.',1)}
+      else if(ev.error==='no-speech'){if(!heardAny)say('No speech heard yet. Keep talking, or check the right microphone is in use.')}
+      else if(ev.error==='network')say('Speech recognition needs an internet connection.',1);
+      else if(ev.error==='audio-capture'){wanted=false;ui();say('No microphone found.',1)}
+    };
+    rec.onend=()=>{running=false;flushAll();if(wanted)setTimeout(start,300);else say('')};
+    rec.start();running=true;
+  }catch(err){running=false;say('Could not start listening: '+err.message,1)}
+}
+mic.addEventListener('click',()=>{
+  const p=problem();if(p){say(p,1);return}
+  wanted=!wanted;ui();
+  if(wanted)start();else{if(rec){try{rec.stop()}catch(err){}}flushAll();say('')}
+});
+const _render=render;render=()=>{_render();ui()};
+render();
+}
+</script>
+</body>
+</html>
