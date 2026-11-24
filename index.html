@@ -10,20 +10,31 @@
 *{box-sizing:border-box;min-width:0}
 html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font:17px/1.5 'Archivo',system-ui,sans-serif}
 body{min-height:100vh;padding:max(16px,4vw)}
-table{width:100%;max-width:900px;margin:0 auto;border-collapse:collapse}
-tr{border-bottom:1px solid var(--line)}
-th{width:52px;font:700 26px/1 'Archivo Narrow',sans-serif;background:var(--panel);vertical-align:top;padding:14px 0;text-align:center}
-td{padding:12px 16px;vertical-align:top}
+.wrap{max-width:900px;margin:0 auto}
+.scroll{overflow-x:auto;margin-bottom:28px}
+table{width:100%;border-collapse:collapse}
+/* vitals */
+.vt th,.vt td{padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+.vt thead th{font:700 15px 'Archivo Narrow',sans-serif;color:var(--mute);text-align:right;background:var(--panel)}
+.vt thead th:first-child{text-align:left}
+.vt tbody th{text-align:left;font-weight:600;background:var(--panel);width:1%;position:sticky;left:0}
+.vt tbody th small{display:block;font-size:12px;color:var(--mute);font-weight:500}
+.vt td{text-align:right;font:700 22px 'Archivo Narrow',sans-serif;font-variant-numeric:tabular-nums}
+.vt td.old{color:var(--mute);font-weight:600}
+.vt td.empty{color:var(--line)}
+.vt td small{font:600 13px 'Archivo',sans-serif;color:var(--mute);margin-left:4px}
+.vt tr.g>*{border-top:2px solid var(--ink)}
+.vt tbody tr:first-child>*{border-top:0}
+.bad,.vt td.bad{color:var(--red)}
+/* IMIST-AMBO */
+.ho tr{border-bottom:1px solid var(--line)}
+.ho th{width:52px;font:700 26px/1 'Archivo Narrow',sans-serif;background:var(--panel);vertical-align:top;padding:14px 0;text-align:center}
+.ho td{padding:12px 16px;vertical-align:top}
 .t{display:block;font-size:13px;font-weight:600;color:var(--mute)}
-.amb{border-top:2px solid var(--ink)}
-.set{display:flex;flex-wrap:wrap;gap:4px 16px;padding:3px 0}
-.set time{font:700 15px 'Archivo Narrow',sans-serif;color:var(--mute);min-width:44px}
-.set span{white-space:nowrap;font-variant-numeric:tabular-nums}
-.set b{font-weight:700}
-.bad{color:var(--red)}
+.ho tr.amb{border-top:2px solid var(--ink)}
 .ln time{font:700 15px 'Archivo Narrow',sans-serif;color:var(--mute);margin-right:8px}
-tr.new{animation:pop 1.2s ease-out}
-@keyframes pop{from{background:color-mix(in srgb,var(--red) 16%,transparent)}to{background:transparent}}
+.new{animation:pop 1.2s ease-out}
+@keyframes pop{from{background:color-mix(in srgb,var(--red) 18%,transparent)}to{background:transparent}}
 #mic{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:88px;height:88px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--ink);display:grid;place-items:center;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.12);transition:top .35s ease,width .35s,height .35s,background .2s,color .2s}
 #mic:focus-visible{outline:3px solid var(--red);outline-offset:3px}
 #mic svg{width:36px;height:36px}
@@ -31,15 +42,19 @@ body.on #mic{background:var(--red);color:#fff;border-color:var(--red);animation:
 body.has #mic{top:auto;bottom:max(20px,env(safe-area-inset-bottom));transform:translateX(-50%);width:68px;height:68px}
 body.has #mic svg{width:28px;height:28px}
 body.has{padding-bottom:180px}
-#st{position:fixed;background:var(--bg);padding:4px 8px;border-radius:8px;left:50%;top:calc(50% + 64px);transform:translateX(-50%);width:min(90vw,520px);margin:0;text-align:center;color:var(--mute);font-size:16px;line-height:1.4}
+#st{position:fixed;left:50%;top:calc(50% + 64px);transform:translateX(-50%);width:min(90vw,520px);margin:0;text-align:center;color:var(--mute);font-size:16px;line-height:1.4;background:var(--bg);padding:4px 8px;border-radius:8px}
 #st.err{color:var(--red)}
 body.has #st{top:auto;bottom:calc(max(20px,env(safe-area-inset-bottom)) + 80px)}
+#out{display:none}body.has #out{display:block}
 @keyframes ring{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--red) 45%,transparent)}100%{box-shadow:0 0 0 22px transparent}}
-@media(prefers-reduced-motion:reduce){tr.new,body.on #mic{animation:none}#mic{transition:none}}
+@media(prefers-reduced-motion:reduce){.new,body.on #mic{animation:none}#mic{transition:none}}
 </style>
 </head>
 <body>
-<table id="tb"></table>
+<div id="out" class="wrap">
+  <div class="scroll"><table id="vt" class="vt"></table></div>
+  <table id="tb" class="ho"></table>
+</div>
 <p id="st" role="status" aria-live="polite"></p>
 <button id="mic" type="button" aria-label="Start listening" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
 <script>
@@ -48,16 +63,21 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=t=>new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});
 const W='\\s*(?:is|of|was|are|at|:|-)?\\s*';
+
+// Vitals, in display order. g = starts a new group (thick line above).
 const VD=[
- {k:'HR',u:'',lo:50,hi:120,re:new RegExp('\\b(?:hr|heart rate|pulse)'+W+'(\\d{2,3})\\b')},
- {k:'BP',u:'',lo:90,hi:180,re:new RegExp('\\b(?:bp|blood pressure|pressure)'+W+'(\\d{2,3})\\s*(?:/|over|on)\\s*(\\d{2,3})')},
- {k:'RR',u:'',lo:10,hi:24,re:new RegExp('\\b(?:rr|resp(?:iratory|irations|s)?(?: rate)?)'+W+'(\\d{1,2})\\b')},
- {k:'SpO₂',u:'%',lo:92,hi:101,re:new RegExp('\\b(?:spo2|sp o2|o2 sats?|sats?|saturations?)'+W+'(\\d{2,3})\\s*%?(?:\\s*on\\s*(room air|ra\\b|\\d+\\s*(?:l|litres|liters|lpm)\\b))?')},
- {k:'GCS',u:'',lo:15,hi:16,re:new RegExp('\\bgcs'+W+'(\\d{1,2})\\b')},
- {k:'BGL',u:'',lo:4,hi:15,re:new RegExp('\\b(?:bgl|bsl|blood sugar|blood glucose|sugar|glucose)'+W+'(\\d{1,2}(?:\\.\\d)?)')},
- {k:'Temp',u:'°',lo:35,hi:38.5,re:new RegExp('\\b(?:temp|temperature)'+W+'(\\d{2}(?:\\.\\d)?)')},
- {k:'Pain',u:'/10',lo:-1,hi:7,re:new RegExp('\\bpain(?: score)?'+W+'(\\d{1,2})\\s*(?:/|out of|on)\\s*10')}
-];
+ {k:'BP',n:'BP',u:'mmHg',g:1,lo:90,hi:180,re:'\\b(?:bp|blood pressure|pressure)'+W+'(\\d{2,3})\\s*(?:/|over|on|x|by|\\*)\\s*(\\d{2,3})'},
+ {k:'HR',n:'Pulse',u:'bpm',lo:50,hi:120,re:'\\b(?:hr|heart rate|pulse(?: rate)?|heart)'+W+'(\\d{2,3})\\b'},
+ {k:'SpO2',n:'SpO₂',u:'%',g:1,lo:92,hi:101,re:'\\b(?:spo2|sp02|sp o2|oxygen saturations?|o2 sat(?:uration)?s?|sats?|saturations?)'+W+'(\\d{2,3})\\s*%?(?:\\s*on\\s*(room air|ra\\b|\\d+\\s*(?:l|litres|liters|lpm)\\b))?'},
+ {k:'RR',n:'Resp rate',u:'/min',lo:10,hi:24,re:'\\b(?:rr|respirat\\w*(?: rate)?|resps?(?: rate)?|breathing rate)'+W+'(\\d{1,2})\\b'},
+ {k:'BGL',n:'BGL',u:'mmol/L',g:1,lo:4,hi:15,re:'\\b(?:bgl|bsl|blood sugar|blood glucose|glucose|sugar)'+W+'(\\d{1,2}(?:\\.\\d)?)'},
+ {k:'Temp',n:'Temp',u:'°C',lo:35,hi:38.5,re:'\\b(?:temp|temperature)'+W+'(\\d{2}(?:\\.\\d)?)'},
+ {k:'EtCO2',n:'EtCO₂',u:'mmHg',g:1,lo:35,hi:45,re:'\\b(?:etco2|etco 2|et co2|etc o2|e t c o 2|end[- ]tidal(?: co2| c o 2)?|capno\\w*)'+W+'(\\d{1,2})\\b'},
+ {k:'GCS',n:'GCS',u:'/15',g:1,opt:1,lo:15,hi:16,re:'\\bgcs'+W+'(\\d{1,2})\\b'},
+ {k:'Pain',n:'Pain',u:'/10',opt:1,lo:-1,hi:7,re:'\\bpain(?: score)?'+W+'(\\d{1,2})\\s*(?:/|out of|on)?\\s*(?:10)?\\b'}
+].map(d=>({...d,re:new RegExp(d.re)}));
+const LABEL=/^(bp|blood pressure|pressure|pulse( rate)?|heart rate|hr|resp\w*( rate)?|rr|sats|spo2|sp02|oxygen saturations?|o2 sats?|bgl|bsl|blood sugar|blood glucose|glucose|sugar|temp|temperature|gcs|etco2|end[- ]tidal( co2)?|capnography|pain( score)?)[.!?]?$/;
+
 const CAT=[
  ['A',/\b(allerg\w*|nkda|nka|anaphyla\w*)\b/],
  ['Med',/\b(meds|medications?|takes|taking|prescribed|warfarin|apixaban|rivaroxaban|dabigatran|clopidogrel|metformin|insulin)\b/],
@@ -70,19 +90,41 @@ const CAT=[
 ];
 const ROWS=[['ID','I','Identification'],['M','M','Mechanism / medical complaint'],['I','I','Injuries / information'],['S','S','Signs'],['T','T','Treatment & trends'],['A','A','Allergies'],['Med','M','Medications'],['B','B','Background'],['O','O','Other / social']];
 
-let E=[],last=null;
+// Number words -> digits ("one ten" -> 110, "ninety four" -> 94)
+const NW={zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19,twenty:20,thirty:30,forty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90};
+function words(t){
+  const out=[];let cur=null;
+  const flush=p=>{if(cur!==null){out.push(String(cur)+(p||''));cur=null}else if(p)out.push(p)};
+  for(const w of t.split(/\s+/)){
+    const m=w.match(/^(.*?)([.,;:!?]*)$/),c=m[1],p=m[2];
+    if(c in NW){const v=NW[c];if(cur===null)cur=v;else if(cur%100===0||(cur>=20&&cur%10===0&&v<10))cur+=v;else{flush();cur=v}if(p)flush(p);continue}
+    if(c==='hundred'){cur=(cur||1)*100;if(p)flush(p);continue}
+    if(c==='and'&&cur!==null&&cur%100===0&&cur>0)continue;
+    if(/^\d{2}$/.test(c)&&cur!==null&&cur>0&&cur<10){cur=cur*100+(+c);flush(p);continue}
+    flush();out.push(w);
+  }
+  flush();return out.join(' ');
+}
+function norm(text){
+  let t=text.toLowerCase().replace(/per ?cent/g,'%').replace(/\bsp o2\b/g,'spo2');
+  t=words(t);
+  t=t.replace(/(\d+)\s*point\s*(\d)/g,'$1.$2').replace(/\b(\d)\s(\d{2})\b/g,'$1$2');
+  return t;
+}
+
+let E=[],last=null,hold='';
 try{E=JSON.parse(localStorage.getItem('handover-e'))||[]}catch(err){}
 const save=()=>{try{localStorage.setItem('handover-e',JSON.stringify(E))}catch(err){}};
 
 function parse(t){
-  const o=[];let rest=t;
+  const o={};let rest=t;
   for(const d of VD){
     const m=t.match(d.re);if(!m)continue;const n=+m[1];
+    if(d.k==='SpO2'&&n>100)continue;
     rest=rest.replace(d.re,' ');
-    if(d.k==='SpO₂'&&n>100)continue;
-    let v=d.k==='BP'?m[1]+'/'+m[2]:m[1]+d.u;
-    if(d.k==='SpO₂'&&m[2])v+=m[2][0]==='r'?' RA':' on '+m[2].replace(/\D+/g,'')+'L';
-    o.push({k:d.k,v,bad:n<d.lo||n>d.hi});
+    let v=d.k==='BP'?m[1]+'/'+m[2]:m[1],x='';
+    if(d.k==='SpO2'&&m[2])x=m[2][0]==='r'?'RA':m[2].replace(/\D+/g,'')+' L';
+    o[d.k]={v,x,bad:n<d.lo||n>d.hi};
   }
   return [o,rest];
 }
@@ -93,46 +135,59 @@ function ident(x){
   return [a?a[1]+(a[2]?(/^(male|man|boy)$/i.test(a[2])?' M':' F'):''):'',nm?nm[1][0].toUpperCase()+nm[1].slice(1):''].filter(Boolean).join(' · ');
 }
 function render(){
-  const g={ID:[],M:[],I:[],S:[],T:[],A:[],Med:[],B:[],O:[]},vs=[];let lastRow=null;
+  const g={ID:[],M:[],I:[],S:[],T:[],A:[],Med:[],B:[],O:[]},cols=[];let lastRow=null,lastCol=-1;
   for(const e of E){
-    const t=e.text.toLowerCase().replace(/per ?cent/g,'%');
-    const [v,rest]=parse(t),id=ident(e.text);
+    const t=norm(e.text);
+    const [v,rest]=parse(t),id=ident(t);
+    const hasV=Object.keys(v).length;
     let cat=null;for(const [k,re] of CAT)if(re.test(rest)){cat=k;break}
     if(id){g.ID.push(id);if(e===last)lastRow='ID'}
-    if(v.length){vs.push({time:e.time,v});if(e===last)lastRow='S'}
-    if(cat||(!v.length&&!id)){const k=cat||'O';g[k].push(e);if(e===last)lastRow=k}
+    if(hasV){
+      // merge readings said within 3 min into one column
+      const c=cols[cols.length-1];
+      if(c&&e.time-c.time<180000&&!Object.keys(v).some(k=>c.v[k]))Object.assign(c.v,v);
+      else cols.push({time:e.time,v:{...v}});
+      if(e===last)lastCol=cols.length-1;
+    }
+    if(cat||(!hasV&&!id)){const k=cat||'O';g[k].push(e);if(e===last)lastRow=k}
   }
-  const line=e=>`<div class="ln">${['T','S'].includes(e._k)?`<time>${fmt(e.time)}</time>`:''}${esc(e.text.trim())}</div>`;
+  // vitals table
+  const rows=VD.filter(d=>!d.opt||cols.some(c=>c.v[d.k]));
+  $('#vt').innerHTML=`<thead><tr><th>Vitals</th>${cols.length?cols.map((c,i)=>`<th>${fmt(c.time)}</th>`).join(''):'<th></th>'}</tr></thead><tbody>`+
+    rows.map((d,ri)=>`<tr class="${d.g&&ri?'g':''}"><th>${d.n}<small>${d.u}</small></th>${cols.length?cols.map((c,i)=>{const x=c.v[d.k];const cls=[x?(x.bad?'bad':''):'empty',i<cols.length-1?'old':'',i===lastCol?'new':''].filter(Boolean).join(' ');return `<td class="${cls}">${x?esc(x.v)+(d.k==='SpO2'?'%':'')+(x.x?`<small>${esc(x.x)}</small>`:''):'—'}</td>`}).join(''):'<td class="empty">—</td>'}</tr>`).join('')+'</tbody>';
+  // IMIST-AMBO
+  const line=(e,k)=>`<div class="ln">${k==='T'?`<time>${fmt(e.time)}</time>`:''}${esc(e.text.trim())}</div>`;
+  let amb=false;
   $('#tb').innerHTML=ROWS.map(([key,letter,name],i)=>{
-    let body='';
-    if(key==='ID')body=g.ID.length?esc(g.ID[0]):'';
-    else if(key==='S')body=vs.map(s=>`<div class="set"><time>${fmt(s.time)}</time>${s.v.map(x=>`<span class="${x.bad?'bad':''}"><b>${x.k}</b> ${esc(x.v)}</span>`).join('')}</div>`).join('')+g.S.map(e=>(e._k='S',line(e))).join('');
-    else body=g[key].map(e=>(e._k=key,line(e))).join('');
+    const body=key==='ID'?(g.ID.length?esc(g.ID[0]):''):g[key].map(e=>line(e,key)).join('');
     if(!body)return '';
-    return `<tr class="${key===lastRow?'new':''}"><th>${letter}</th><td><span class="t">${name}</span>${body}</td></tr>`;
+    const a=i>=5&&!amb;if(a)amb=true;
+    return `<tr class="${[a?'amb':'',key===lastRow?'new':''].filter(Boolean).join(' ')}"><th>${letter}</th><td><span class="t">${name}</span>${body}</td></tr>`;
   }).join('');
-  const rows=[...document.querySelectorAll('#tb tr')];
-  const firstAmbo=rows.find(r=>/Allergies|Medications|Background|Other/.test(r.textContent));
-  if(firstAmbo&&firstAmbo!==rows[0])firstAmbo.classList.add('amb');
-  const n=document.querySelector('tr.new');if(n)n.scrollIntoView({block:'nearest',behavior:'smooth'});
+  const first=$('#tb tr');if(first)first.classList.remove('amb');
+  const n=document.querySelector('.new');if(n)n.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'});
+  ui();
 }
 function heard(text){
   text=String(text||'').trim();if(!text)return;
-  const l=text.toLowerCase();
-  if(/^(new patient|clear( all| everything)?|reset)\.?$/.test(l)){E=[];last=null;save();render();return}
-  if(/^(scratch that|delete( that| last)?|undo)\.?$/.test(l)){E.pop();last=null;save();render();return}
+  const l=text.toLowerCase().replace(/[.!?]+$/,'');
+  if(/^(new patient|clear( all| everything)?|reset)$/.test(l)){E=[];last=null;hold='';save();render();return}
+  if(/^(scratch that|delete( that| last)?|undo)$/.test(l)){E.pop();last=null;hold='';save();render();return}
+  // a vital's name said on its own: wait for the number
+  if(LABEL.test(norm(text))){hold=text;say(text+'…');return}
+  if(hold){text=hold+' '+text;hold=''}
   last={time:Date.now(),text};E.push(last);save();render();
 }
 
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 let rec=null,running=false,wanted=false,gen=0,done={},pend={},timer=null,heardAny=false;
 const mic=$('#mic'),st=$('#st');
-const say=(m,err)=>{st.textContent=m||'';st.classList.toggle('err',!!err)};
-const ui=()=>{document.body.classList.toggle('on',wanted);document.body.classList.toggle('has',E.length>0);mic.setAttribute('aria-pressed',wanted);mic.setAttribute('aria-label',wanted?'Stop listening':'Start listening')};
+function say(m,err){st.textContent=m||'';st.classList.toggle('err',!!err)}
+function ui(){document.body.classList.toggle('on',wanted);document.body.classList.toggle('has',E.length>0);mic.setAttribute('aria-pressed',wanted);mic.setAttribute('aria-label',wanted?'Stop listening':'Start listening')}
 function problem(){
   if(window.top!==window)return 'The microphone is blocked in this preview. Open the page on your website in Chrome or Safari.';
   if(!window.isSecureContext)return 'The microphone needs a secure link (https). Open the page from your website.';
-  if(!SR)return 'This browser has no speech recognition. Use Chrome, or Safari on iPhone.';
+  if(!SR)return 'This browser has no speech recognition. Use Chrome, or Safari on iPhone or iPad.';
   return '';
 }
 function commit(key){if(done[key]||!pend[key])return;done[key]=1;heard(pend[key]);delete pend[key]}
@@ -148,14 +203,14 @@ function start(){
       for(let i=ev.resultIndex;i<ev.results.length;i++){
         const r=ev.results[i],key=g+':'+i,txt=r[0].transcript.trim();
         if(!txt)continue;heardAny=true;
-        if(r.isFinal){pend[key]=txt;commit(key)}else{pend[key]=txt;live+=txt+' '}
+        pend[key]=txt;if(r.isFinal)commit(key);else live+=txt+' ';
       }
-      say(live.trim());
-      clearTimeout(timer);timer=setTimeout(()=>{flushAll();say('')},1600);
+      if(live)say(live.trim());
+      clearTimeout(timer);timer=setTimeout(()=>{flushAll();if(!hold)say('')},1600);
     };
     rec.onerror=ev=>{
-      if(/not-allowed|service-not-allowed/.test(ev.error)){wanted=false;ui();say('Microphone access was refused. Allow the microphone for this site in your browser settings, then tap again.',1)}
-      else if(ev.error==='no-speech'){if(!heardAny)say('No speech heard yet. Keep talking, or check the right microphone is in use.')}
+      if(/not-allowed|service-not-allowed/.test(ev.error)){wanted=false;ui();say('Speech recognition was blocked. Allow the microphone for this site, and on iPhone or iPad turn on Settings › General › Keyboard › Enable Dictation.',1)}
+      else if(ev.error==='no-speech'){if(!heardAny)say('No speech heard yet. Keep talking.')}
       else if(ev.error==='network')say('Speech recognition needs an internet connection.',1);
       else if(ev.error==='audio-capture'){wanted=false;ui();say('No microphone found.',1)}
     };
@@ -168,7 +223,7 @@ mic.addEventListener('click',()=>{
   wanted=!wanted;ui();
   if(wanted)start();else{if(rec){try{rec.stop()}catch(err){}}flushAll();say('')}
 });
-const _render=render;render=()=>{_render();ui()};
+window.__test={norm,parse,heard,get E(){return E}};
 render();
 }
 </script>
